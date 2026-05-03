@@ -1,26 +1,17 @@
-\/**
- * Video Balancer - Native Lampa Source
- * Adds as built-in video source in Settings
- */
 (function() {
     'use strict';
     
     var SOURCES = [
-        { name: 'Filmix', url: 'http://144.124.225.106:11310/lite/filmix' },
-        { name: 'Collaps', url: 'http://88.218.61.149:9219/lite/collaps' },
-        { name: 'Hydraflix', url: 'http://144.124.225.106:11310/lite/hydraflix' }
+        { name: 'Filmix', url: 'http://144.124.225.106:11310/lite/filmix', icon: '🎬' },
+        { name: 'Collaps', url: 'http://88.218.61.149:9219/lite/collaps', icon: '📺' },
+        { name: 'Hydraflix', url: 'http://144.124.225.106:11310/lite/hydraflix', icon: '🚀' }
     ];
     
     var SOURCE_ID = 'video_balancer';
     var SOURCE_NAME = 'Video Balancer';
     
-    function waitForLampa(callback, attempts) {
-        attempts = attempts || 0;
-        if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Scroll && Lampa.Activity && Lampa.Storage) {
-            callback();
-        } else if (attempts < 100) {
-            setTimeout(function() { waitForLampa(callback, attempts + 1); }, 100);
-        }
+    function log(msg) {
+        console.log('[VB] ' + msg);
     }
     
     function parseVideos(str, sourceName) {
@@ -42,314 +33,295 @@
     }
     
     function createComponent(object) {
+        var network = new Lampa.Reguest();
         var scroll = new Lampa.Scroll({ mask: true, over: true });
         var files = new Lampa.Explorer(object);
+        var filter = new Lampa.Filter(object);
         var allVideos = [];
-        var done = 0;
+        var doneSources = 0;
+        var totalSources = SOURCES.length;
+        var initialized;
+        var last;
         
-        var comp = {
-            create: function() { return files.render(); },
+        this.initialize = function() {
+            var _this = this;
+            filter.onSearch = function(value) { Lampa.Activity.replace({ search: value, clarification: true }); };
+            filter.onBack = function() { _this.start(); };
+            if (filter.addButtonBack) filter.addButtonBack();
             
-            initialize: function() {
-                scroll.body().addClass('vb-balancer');
-                files.appendFiles(scroll.render());
+            files.appendFiles(scroll.render());
+            files.appendHead(filter.render());
+            scroll.body().addClass('torrent-list');
+            scroll.minus(files.render().find('.explorer__files-head'));
+            this.search();
+        };
+        
+        this.create = function() { return this.render(); };
+        this.search = function() { this.activity.loader(true); this.find(); };
+        
+        this.find = function() {
+            var movie = object.movie || object;
+            var title = movie.title || movie.name || 'Test';
+            
+            scroll.body().html(
+                '<div style="padding:2em;text-align:center;color:#fff;">' +
+                '<div style="font-size:1.4em;margin-bottom:0.3em;color:#3498db;">⚡ ' + SOURCE_NAME + '</div>' +
+                '<div style="font-size:0.85em;opacity:0.5;margin-bottom:1.5em;">Поиск: ' + title + '</div>' +
+                '<div id="vb-progress" style="font-size:1.2em;margin-bottom:0.5em;">0 / ' + totalSources + '</div>' +
+                '<div style="height:6px;background:rgba(255,255,255,0.15);border-radius:3px;overflow:hidden;margin-bottom:1em;">' +
+                '<div id="vb-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3498db,#2ecc71);transition:width 0.5s;"></div></div>' +
+                '<div id="vb-status" style="font-size:0.85em;opacity:0.6;max-height:200px;overflow:auto;"></div>' +
+                '</div>'
+            );
+            
+            SOURCES.forEach(function(src) {
+                var params = [];
+                params.push('id=' + encodeURIComponent(movie.id || '550'));
+                params.push('title=' + encodeURIComponent(title));
+                params.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name || ''));
+                params.push('serial=' + (movie.name ? 1 : 0));
+                params.push('year=' + ((movie.release_date || movie.first_air_date || '')+'').slice(0,4));
+                if (movie.imdb_id) params.push('imdb_id=' + movie.imdb_id);
+                params.push('source=tmdb');
+                params.push('clarification=0');
                 
-                var title = object.movie ? (object.movie.title || object.movie.name || 'Search') : 'Search';
+                network.clear();
+                network.timeout(8000);
+                network.silent(src.url + '?' + params.join('&'), function(data) {
+                    var vids = parseVideos(data, src.name);
+                    allVideos = allVideos.concat(vids);
+                    var status = vids.length > 0 ? '<span style="color:#2ecc71;">+' + vids.length + ' видео</span>' : '<span style="color:#e74c3c;">нет результатов</span>';
+                    $('#vb-status').append('<div>+ ' + src.name + ': ' + status + '</div>');
+                    doneSources++;
+                    updateProgress();
+                    if (doneSources >= totalSources) finish();
+                }, function(a, c) {
+                    $('#vb-status').append('<div style="color:#e74c3c;">- ' + src.name + ': ошибка ' + c + '</div>');
+                    doneSources++;
+                    updateProgress();
+                    if (doneSources >= totalSources) finish();
+                });
+            });
+        };
+        
+        function updateProgress() {
+            var pct = Math.round((doneSources / totalSources) * 100);
+            $('#vb-progress').text(doneSources + ' / ' + totalSources + ' загружено');
+            $('#vb-bar').css('width', pct + '%');
+            $('#vb-status').scrollTop($('#vb-status')[0].scrollHeight);
+        }
+        
+        function finish() {
+            scroll.clear();
+            this.activity.loader(false);
+            
+            if (!allVideos.length) {
+                scroll.append($('<div class="online-empty"><div class="online-empty__title">Ничего не найдено</div><div class="online-empty__time">Попробуйте другое название</div></div>'));
+                return;
+            }
+            
+            var grouped = {};
+            allVideos.forEach(function(v) {
+                var k = v.source;
+                if (!grouped[k]) grouped[k] = [];
+                grouped[k].push(v);
+            });
+            
+            scroll.body().html('<div style="padding:1em;background:rgba(46,204,113,0.2);border-radius:0.5em;margin:0.5em;text-align:center;color:#2ecc71;font-weight:bold;font-size:1.2em;">' + allVideos.length + ' видео найдено</div>');
+            
+            Object.keys(grouped).sort(function(a,b){ return grouped[b].length - grouped[a].length }).forEach(function(src) {
+                var block = $('<div style="margin:0.5em;padding:1em;background:rgba(255,255,255,0.05);border-radius:0.5em;"><div style="font-size:1.1em;font-weight:bold;color:#3498db;margin-bottom:0.5em;">' + src + ' (' + grouped[src].length + ')</div></div>');
                 
-                scroll.body().html(
-                    '<div style="padding:2em;text-align:center;color:#fff;">' +
-                    '<div style="font-size:1.5em;margin-bottom:0.5em;">Video Balancer</div>' +
-                    '<div style="font-size:0.9em;opacity:0.5;margin-bottom:1.5em;">3 Free Sources - No Payment</div>' +
-                    '<div id="vb-title" style="font-size:1.1em;margin-bottom:1em;color:#3498db;">' + title + '</div>' +
-                    '<div id="vb-status" style="font-size:0.9em;opacity:0.7;">Searching...</div>' +
-                    '<div style="height:4px;background:rgba(255,255,255,0.1);margin:1em 0;border-radius:2px;">' +
-                    '<div id="vb-bar" style="height:100%;width:0%;background:linear-gradient(90deg,#3498db,#2ecc71);transition:width 0.3s;"></div></div>' +
-                    '<div id="vb-log" style="font-size:0.75em;opacity:0.5;max-height:100px;overflow:auto;"></div>' +
+                grouped[src].forEach(function(v) {
+                    var q = v.maxquality || (v.quality ? Object.keys(v.quality)[0] : '') || '';
+                    var ti = (v.title || 'Video').trim();
+                    var tr = v.translate || '';
+                    
+                    var row = $('<div class="online-prestige online-prestige--full selector" style="margin:0.3em 0;padding:0.8em;background:rgba(52,152,219,0.15);border-radius:0.3em;cursor:pointer;"><div style="display:flex;justify-content:space-between;"><div><div style="font-size:1em;">' + ti + '</div><div style="font-size:0.8em;opacity:0.5;">' + tr + (q ? ' | ' + q : '') + '</div></div><div style="opacity:0.4;padding-left:1em;">▶</div></div></div>');
+                    
+                    row.on('hover:enter', function() {
+                        var url = v.url || v.stream;
+                        if (v.method === 'call' && v.stream) url = v.stream;
+                        if (url) {
+                            Lampa.Player.play({ title: ti, url: url, isonline: true, quality: q });
+                            if (movie.id) Lampa.Favorite.add('history', movie, 100);
+                        } else {
+                            Lampa.Noty.show('Нет ссылки');
+                        }
+                    });
+                    
+                    row.on('hover:focus', function(e) { last = e.target; scroll.update($(e.target), true); });
+                    block.append(row);
+                });
+                scroll.append(block);
+            });
+            
+            var back = $('<div class="selector" style="padding:1.5em;text-align:center;color:#666;margin-top:1em;cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:0.3em;">← Назад</div>');
+            back.on('hover:enter', function() { Lampa.Activity.backward(); });
+            back.on('hover:focus', function(e) { last = e.target; scroll.update($(e.target), true); });
+            scroll.append(back);
+            
+            Lampa.Controller.enable('content');
+        }
+        
+        this.activity = object;
+        this.render = function() { return files.render(); };
+        
+        this.start = function() {
+            if (Lampa.Activity.active().activity !== this.activity) return;
+            if (!initialized) { initialized = true; this.initialize(); }
+            
+            Lampa.Controller.add('content', {
+                toggle: function() { Lampa.Controller.collectionSet(scroll.render(), files.render()); Lampa.Controller.collectionFocus(last || false, scroll.render()); },
+                up: function() { if (Navigator.canmove('up')) Navigator.move('up'); else Lampa.Controller.toggle('head'); },
+                down: function() { Navigator.move('down'); },
+                right: function() { if (Navigator.canmove('right')) Navigator.move('right'); else filter.show('Фильтр', 'filter'); },
+                left: function() { if (Navigator.canmove('left')) Navigator.move('left'); else Lampa.Controller.toggle('menu'); },
+                back: function() { Lampa.Activity.backward(); }
+            });
+            
+            Lampa.Controller.toggle('content');
+        };
+        
+        this.pause = function() {};
+        this.stop = function() {};
+        this.destroy = function() { network.clear(); files.destroy(); scroll.destroy(); };
+    }
+    
+    function startPlugin() {
+        if (window.video_balancer_installed_v4) {
+            log('Already installed');
+            return;
+        }
+        window.video_balancer_installed_v4 = true;
+        
+        log('=== Video Balancer v4 Installing ===');
+        
+        Lampa.Component.add(SOURCE_ID, createComponent);
+        log('Component registered: ' + SOURCE_ID);
+        
+        Lampa.Manifest.plugins = {
+            type: 'video',
+            version: '4.0.0',
+            name: SOURCE_NAME,
+            description: '3 бесплатных источника - Без оплаты',
+            component: SOURCE_ID,
+            onContextLauch: function(obj) {
+                Lampa.Activity.push({
+                    title: SOURCE_NAME,
+                    component: SOURCE_ID,
+                    movie: obj,
+                    page: 1
+                });
+            }
+        };
+        log('Plugin manifest set (official format)');
+        
+        Lampa.Listener.follow('full', function(e) {
+            if (e.type === 'complite') {
+                var render = e.object.activity.render();
+                var movie = e.data.movie;
+                var title = movie.title || movie.name || 'Video';
+                
+                if (render.find('.vb-btn').length) return;
+                
+                var btn = $(
+                    '<div class="full-start__button selector vb-btn" style="background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;font-weight:600;padding:0.7em 1.2em;border-radius:0.3em;margin-right:0.5em;cursor:pointer;">' +
+                    '⚡ ' + SOURCE_NAME +
                     '</div>'
                 );
                 
-                function log(msg, isError) {
-                    var color = isError ? '#e74c3c' : '#2ecc71';
-                    $('#vb-log').append('<div style="color:' + color + ';margin:2px 0;">' + (isError ? '-' : '+') + ' ' + msg + '</div>');
-                    $('#vb-log').scrollTop($('#vb-log')[0].scrollHeight);
-                }
-                
-                function finish() {
-                    scroll.clear();
-                    
-                    if (!allVideos.length) {
-                        scroll.body().html(
-                            '<div style="padding:4em;text-align:center;color:#888;">' +
-                            '<div style="font-size:2em;margin-bottom:0.5em;">(</div>' +
-                            '<div style="font-size:1.1em;">No videos found</div>' +
-                            '<div style="opacity:0.5;margin-top:0.5em;">Try another title</div>' +
-                            '</div>'
-                        );
-                        Lampa.Controller.enable('content');
-                        return;
-                    }
-                    
-                    var grouped = {};
-                    allVideos.forEach(function(v) {
-                        var k = v.source;
-                        if (!grouped[k]) grouped[k] = [];
-                        grouped[k].push(v);
-                    });
-                    
-                    var total = allVideos.length;
-                    scroll.body().html(
-                        '<div style="padding:1em;background:rgba(46,204,113,0.2);border-radius:0.5em;margin:0.5em;text-align:center;font-size:1.2em;">' +
-                        '<span style="color:#2ecc71;font-weight:bold;">' + total + '</span> videos found' +
-                        '</div>'
-                    );
-                    
-                    Object.keys(grouped).sort(function(a,b){ return grouped[b].length - grouped[a].length }).forEach(function(src) {
-                        var block = $('<div style="margin:0.5em;padding:1em;background:rgba(255,255,255,0.05);border-radius:0.5em;"></div>');
-                        block.append(
-                            '<div style="font-size:1.1em;font-weight:bold;color:#3498db;margin-bottom:0.5em;">' +
-                            src + ' <span style="opacity:0.5;font-size:0.8em;">(' + grouped[src].length + ')</span>' +
-                            '</div>'
-                        );
-                        
-                        grouped[src].forEach(function(v) {
-                            var q = v.maxquality || (v.quality ? Object.keys(v.quality)[0] : '') || '';
-                            var tr = v.translate || '';
-                            var ti = (v.title || 'Video').trim();
-                            
-                            var row = $('<div class="selector" style="padding:0.8em;cursor:pointer;background:rgba(52,152,219,0.15);border-radius:0.3em;margin-bottom:4px;"></div>');
-                            row.html(
-                                '<div style="font-size:0.95em;">' + ti + '</div>' +
-                                '<div style="font-size:0.75em;opacity:0.6;margin-top:3px;">' + tr + (q ? ' | ' + q : '') + '</div>'
-                            );
-                            
-                            row.on('hover:enter', function() {
-                                Lampa.Loading.start();
-                                var url = v.url || v.stream;
-                                if (v.method === 'call' && v.stream) url = v.stream;
-                                
-                                if (url) {
-                                    Lampa.Loading.stop();
-                                    Lampa.Player.play({ title: ti, url: url, isonline: true, quality: q });
-                                    if (object.movie && object.movie.id) Lampa.Favorite.add('history', object.movie, 100);
-                                } else {
-                                    Lampa.Loading.stop();
-                                    Lampa.Noty.show('No URL');
-                                }
-                            });
-                            
-                            row.on('hover:focus', function() {
-                                $(this).css('background', 'rgba(52,152,219,0.4)');
-                                scroll.update($(this), true);
-                            });
-                            
-                            row.on('hover:blur', function() {
-                                $(this).css('background', 'rgba(52,152,219,0.15)');
-                            });
-                            
-                            block.append(row);
-                        });
-                        scroll.body().append(block);
-                    });
-                    
-                    var back = $('<div class="selector" style="padding:1.5em;text-align:center;color:#666;cursor:pointer;margin:1em 0;border:1px solid rgba(255,255,255,0.1);border-radius:0.3em;font-size:0.95em;">Back</div>');
-                    back.on('hover:enter', function() { Lampa.Activity.backward(); });
-                    scroll.body().append(back);
-                    
-                    Lampa.Controller.enable('content');
-                }
-                
-                SOURCES.forEach(function(src) {
-                    var params = [];
-                    if (object.movie) {
-                        params.push('id=' + encodeURIComponent(object.movie.id || '550'));
-                        params.push('title=' + encodeURIComponent(object.movie.title || object.movie.name || ''));
-                        params.push('original_title=' + encodeURIComponent(object.movie.original_title || object.movie.original_name || ''));
-                        params.push('serial=' + (object.movie.name ? 1 : 0));
-                        params.push('year=' + ((object.movie.release_date || object.movie.first_air_date || '')+'').slice(0,4));
-                        if (object.movie.imdb_id) params.push('imdb_id=' + object.movie.imdb_id);
-                        if (object.movie.kinopoisk_id) params.push('kinopoisk_id=' + object.movie.kinopoisk_id);
-                        params.push('source=tmdb');
-                        params.push('clarification=0');
-                    }
-                    
-                    $('#vb-status').text('Loading ' + src.name + '...');
-                    log(src.name + ' - connecting...');
-                    
-                    $.ajax({
-                        url: src.url + '?' + params.join('&'),
-                        timeout: 10000,
-                        cache: false,
-                        success: function(data) {
-                            var vids = parseVideos(data, src.name);
-                            allVideos = allVideos.concat(vids);
-                            var pct = Math.round((++done / SOURCES.length) * 100);
-                            $('#vb-bar').css('width', pct + '%');
-                            log(src.name + ': ' + vids.length + ' videos', vids.length === 0);
-                            $('#vb-status').text(done + '/' + SOURCES.length + ' sources loaded');
-                            if (done >= SOURCES.length) finish();
-                        },
-                        error: function() {
-                            var pct = Math.round((++done / SOURCES.length) * 100);
-                            $('#vb-bar').css('width', pct + '%');
-                            log(src.name + ': error', true);
-                            $('#vb-status').text(done + '/' + SOURCES.length + ' sources loaded');
-                            if (done >= SOURCES.length) finish();
-                        }
-                    });
-                });
-            },
-            
-            start: function() {
-                if (Lampa.Activity.active().activity !== this.activity) return;
-                this.initialize();
-                
-                Lampa.Controller.add(SOURCE_ID, {
-                    toggle: function() {
-                        Lampa.Controller.collectionSet(scroll.render());
-                        Lampa.Controller.collectionFocus(false, scroll.render());
-                    },
-                    up: function() { Navigator.move('up'); },
-                    down: function() { Navigator.move('down'); },
-                    left: function() { Navigator.canmove('left') ? Navigator.move('left') : Lampa.Controller.toggle('menu'); },
-                    back: function() { Lampa.Activity.backward(); }
-                });
-                Lampa.Controller.toggle(SOURCE_ID);
-            },
-            
-            render: function() { return files.render(); },
-            destroy: function() { scroll.destroy(); files.destroy(); }
-        };
-        
-        return comp;
-    }
-    
-    // Register as Lampa component
-    waitForLampa(function() {
-        Lampa.Component.add(SOURCE_ID, createComponent);
-        
-        // Add to plugins list
-        Lampa.Manifest.plugins = Lampa.Manifest.plugins || [];
-        var exists = Lampa.Manifest.plugins.some(function(p) { return p.component === SOURCE_ID; });
-        if (!exists) {
-            Lampa.Manifest.plugins.push({
-                type: 'video',
-                name: SOURCE_NAME,
-                description: '3 free sources - no payment required',
-                component: SOURCE_ID,
-                onContextLauch: function(obj) {
+                btn.on('hover:enter', function() {
+                    Lampa.Component.add(SOURCE_ID, createComponent);
                     Lampa.Activity.push({
+                        url: '',
                         title: SOURCE_NAME,
                         component: SOURCE_ID,
-                        movie: obj,
+                        search: title,
+                        search_one: title,
+                        search_two: movie.original_title || movie.original_name || '',
+                        movie: movie,
                         page: 1
                     });
-                }
-            });
-        }
-        
-        // Add button to movie card
-        Lampa.Listener.follow('full', function(e) {
-            if (e.type === 'complite') {
-                setTimeout(function() {
-                    var render = e.object.activity.render();
+                });
+                
+                function insertBtn() {
                     if (render.find('.vb-btn').length) return;
-                    
-                    var btn = $(
-                        '<div class="full-start__button selector vb-btn" ' +
-                        'style="background:linear-gradient(135deg,#3498db,#2980b9);color:#fff;font-weight:600;' +
-                        'padding:0.8em 1.2em;border-radius:0.3em;margin-right:0.5em;cursor:pointer;">' +
-                        SOURCE_NAME + '</div>'
-                    );
-                    
-                    btn.on('hover:enter', function() {
-                        Lampa.Activity.push({
-                            title: SOURCE_NAME,
-                            component: SOURCE_ID,
-                            movie: e.data.movie,
-                            page: 1
-                        });
-                    });
-                    
-                    var playBtn = render.find('.button--play');
-                    if (playBtn.length) playBtn.before(btn);
-                }, 500);
+                    var btns = render.find('.full-start__buttons');
+                    if (btns.length) { btns.append(btn); log('Button added to buttons'); return; }
+                    var play = render.find('.button--play');
+                    if (play.length) { play.before(btn); log('Button added before play'); return; }
+                    var first = render.find('.full-start__button').first();
+                    if (first.length) { first.before(btn); log('Button added before first'); return; }
+                }
+                
+                insertBtn();
+                setTimeout(insertBtn, 500);
+                setTimeout(insertBtn, 1000);
+                setTimeout(insertBtn, 2000);
             }
         });
         
-        // Add to Settings > Video Sources
         Lampa.Listener.follow('settings', function(e) {
             if (e.type === 'complite') {
                 setTimeout(function() {
                     var render = e.object.render();
-                    if (render.find('.vb-setting').length) return;
+                    if (render.find('.vb-setting-final').length) return;
                     
-                    // Find video source settings section
-                    var sourceSection = render.find('[data-component="sources"]').closest('.settings-folder');
+                    var sourcesFolder = render.find('[data-component="sources"]');
+                    var videoFolders = render.find('.settings-folder');
                     
-                    if (sourceSection.length) {
-                        var item = $(
-                            '<div class="settings-param selector vb-setting" ' +
-                            'style="padding:1em;background:rgba(52,152,219,0.2);cursor:pointer;' +
-                            'border-left:3px solid #3498db;margin:0.5em 0;">' +
-                            '<div style="display:flex;align-items:center;">' +
-                            '<div style="flex:1;">' +
-                            '<div style="font-size:1.1em;font-weight:600;">' + SOURCE_NAME + '</div>' +
-                            '<div style="font-size:0.8em;opacity:0.6;margin-top:3px;">3 sources: Filmix, Collaps, Hydraflix</div>' +
-                            '</div>' +
-                            '<div style="color:#2ecc71;font-size:0.9em;">FREE</div>' +
-                            '</div>' +
-                            '</div>'
-                        );
-                        
-                        item.on('hover:enter', function() {
-                            Lampa.Activity.push({
-                                title: SOURCE_NAME,
-                                component: SOURCE_ID,
-                                movie: { id: '550', title: 'Test Movie' },
-                                page: 1
-                            });
+                    var settingItem = $(
+                        '<div class="settings-param selector vb-setting-final" style="padding:1em;background:rgba(52,152,219,0.15);cursor:pointer;border-left:3px solid #3498db;margin:0.5em 1em;">' +
+                        '<div style="display:flex;justify-content:space-between;align-items:center;">' +
+                        '<div><div style="font-size:1.1em;font-weight:600;">⚡ ' + SOURCE_NAME + '</div>' +
+                        '<div style="font-size:0.85em;opacity:0.6;margin-top:3px;">Filmix + Collaps + Hydraflix • FREE</div></div>' +
+                        '<div style="background:#2ecc71;color:#fff;padding:0.3em 0.8em;border-radius:0.3em;font-size:0.8em;font-weight:bold;">FREE</div>' +
+                        '</div></div>'
+                    );
+                    
+                    settingItem.on('hover:enter', function() {
+                        Lampa.Activity.push({
+                            url: '',
+                            title: SOURCE_NAME,
+                            component: SOURCE_ID,
+                            movie: { id: '550', title: 'Test' },
+                            page: 1
                         });
-                        
-                        sourceSection.after(item);
+                    });
+                    
+                    if (sourcesFolder.length) {
+                        sourcesFolder.after(settingItem);
+                        log('Added after sources folder');
+                    } else if (videoFolders.length > 0) {
+                        videoFolders.first().after(settingItem);
+                        log('Added after first video folder');
+                    } else {
+                        render.append(settingItem);
+                        log('Appended to render');
                     }
-                }, 200);
+                }, 1500);
             }
         });
         
-        // Register as video source parser
-        Lampa.VideoSource = Lampa.VideoSource || {};
-        Lampa.VideoSource[SOURCE_ID] = {
-            name: SOURCE_NAME,
-            parse: function(movie, callback) {
-                var results = [];
-                var loaded = 0;
-                
-                SOURCES.forEach(function(src) {
-                    var params = [];
-                    params.push('id=' + encodeURIComponent(movie.id || '550'));
-                    params.push('title=' + encodeURIComponent(movie.title || movie.name || ''));
-                    params.push('serial=' + (movie.name ? 1 : 0));
-                    params.push('year=' + ((movie.release_date || movie.first_air_date || '')+'').slice(0,4));
-                    
-                    $.ajax({
-                        url: src.url + '?' + params.join('&'),
-                        timeout: 8000,
-                        success: function(data) {
-                            var vids = parseVideos(data, src.name);
-                            results = results.concat(vids);
-                            loaded++;
-                            if (loaded >= SOURCES.length) callback(results);
-                        },
-                        error: function() {
-                            loaded++;
-                            if (loaded >= SOURCES.length) callback(results);
-                        }
-                    });
-                });
-            }
-        };
+        log('=== Installation Complete ===');
         
-        window.videoBalancerReady = true;
-        console.log('[Video Balancer] Installed successfully');
-    });
+        if (typeof alert !== 'undefined') {
+            setTimeout(function() {
+                alert('⚡ Video Balancer v4 installed!\n\n3 Free Sources:\n• Filmix\n• Collaps\n• Hydraflix\n\nGo to any movie and click the ⚡ button!');
+            }, 500);
+        }
+    }
+    
+    var init_timer = setInterval(function() {
+        if (typeof Lampa !== 'undefined' && Lampa.Component && Lampa.Manifest) {
+            clearInterval(init_timer);
+            startPlugin();
+        }
+    }, 200);
+    
+    if (document.readyState === 'complete') {
+        clearInterval(init_timer);
+        startPlugin();
+    }
 })();
