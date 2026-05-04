@@ -1,0 +1,338 @@
+(function() {
+  'use strict';
+
+  // ============================================
+  // 🔥 TIMOS ULTIMATE v6.0 - ФИНАЛЬНЫЙ БАЛАНСЕР
+  // 23 источника • 5 серверов • 4K • Онлайн
+  // ============================================
+
+  var TOKEN = 'free_token_123';
+  var RC_PARAMS = 'cub_id=1075737612&account_email=qwerty.goldy@gmail.com&uid=uw66smxc&nws_id=9yffoznegf4uxuat4ksqt2oqgnreymnp';
+
+  var ALL_SOURCES = [
+    // === Z01.ONLINE ===
+    { name: '🎬 Z01 Filmix 4K', url: 'http://z01.online/lite/filmix', token: false },
+    { name: '📺 VK Видео 1080p', url: 'http://z01.online/lite/vkmovie', token: false },
+    { name: '🎥 VeoVeo 1080p', url: 'http://z01.online/lite/veoveo', token: false },
+    { name: '▶️ Rutube', url: 'http://z01.online/lite/rutubemovie', token: false },
+    { name: '💿 iRemux', url: 'http://z01.online/lite/remux', token: false },
+    { name: '🌍 Geosaitebi', url: 'http://z01.online/lite/geosaitebi', token: false },
+
+    // === SHOWYPRO.COM ===
+    { name: '💎 FXAPI 4K HDR', url: 'http://showypro.com/lite/fxapi', token: true },
+    { name: '🌊 Alloha 1080p', url: 'http://showypro.com/lite/alloha', token: true },
+    { name: '🏴‍☠️ Pidtor 4K', url: 'http://showypro.com/lite/pidtor', token: true },
+    { name: '🎯 Mirage 4K', url: 'http://showypro.com/lite/mirage', token: true },
+
+    // === ПРЯМЫЕ IP ===
+    { name: '📀 Filmix Direct 1', url: 'http://144.124.225.106:11310/lite/filmix', token: true },
+    { name: '📀 Filmix Direct 2', url: 'http://88.218.61.149:9219/lite/filmix', token: true },
+    { name: '📀 Filmix Direct 3', url: 'http://91.184.245.78:11560/lite/filmix', token: true },
+    { name: '📦 Collaps', url: 'http://88.218.61.149:9219/lite/collaps', token: true },
+    { name: '⚡ Collaps-Dash', url: 'http://88.218.61.149:9219/lite/collaps-dash', token: true },
+    { name: '💧 Hydraflix', url: 'http://144.124.225.106:11310/lite/hydraflix', token: true },
+    { name: '🎯 Videasy', url: 'http://144.124.225.106:11310/lite/videasy', token: true },
+    { name: '🎮 Smashystream', url: 'http://144.124.225.106:11310/lite/smashystream', token: true },
+    { name: '🌊 Alloha Direct', url: 'http://88.218.61.149:9219/lite/alloha', token: true },
+
+    // === RC.BWA.AD ===
+    { name: '🔵 RC Filmix 4K', url: 'http://rc.bwa.ad/lite/filmix', token: false, rc: true },
+    { name: '🔵 RC VK Видео', url: 'http://rc.bwa.ad/lite/vkmovie', token: false, rc: true },
+    { name: '🔵 RC VeoVeo', url: 'http://rc.bwa.ad/lite/veoveo', token: false, rc: true },
+    { name: '🔵 RC Geosaitebi', url: 'http://rc.bwa.ad/lite/geosaitebi', token: false, rc: true }
+  ];
+
+  function addToken(url, source) {
+    if (source.token && url.indexOf('showy_token=') === -1) {
+      url = Lampa.Utils.addUrlComponent(url, 'showy_token=' + TOKEN);
+    }
+    if (source.rc && url.indexOf('cub_id=') === -1) {
+      url = Lampa.Utils.addUrlComponent(url, RC_PARAMS);
+    }
+    return url;
+  }
+
+  function parseVideos(str, sourceName) {
+    try {
+      var html = $('<div>' + str + '</div>');
+      var videos = [];
+      
+      html.find('.videos__item').each(function() {
+        var item = $(this);
+        var data;
+        try { data = JSON.parse(item.attr('data-json')); } catch(e) { return; }
+        
+        if (data.method === 'play' || data.method === 'call' || data.method === 'link') {
+          data.source = sourceName;
+          data.season = item.attr('s') ? parseInt(item.attr('s')) : undefined;
+          data.episode = item.attr('e') ? parseInt(item.attr('e')) : undefined;
+          data.title = item.text() || data.title || data.translate || 'Без названия';
+          
+          if (data.url && data.url.indexOf(' or ') !== -1) {
+            data.url = data.url.split(' or ')[0];
+          }
+          if (data.stream && data.stream.indexOf(' or ') !== -1) {
+            data.stream = data.stream.split(' or ')[0];
+          }
+          
+          if (data.translate && data.translate.indexOf('4K') !== -1) data.quality_text = '4K';
+          else if (data.translate && data.translate.indexOf('1080') !== -1) data.quality_text = '1080p';
+          else if (data.translate && data.translate.indexOf('720') !== -1) data.quality_text = '720p';
+          else if (data.maxquality) data.quality_text = data.maxquality;
+          
+          if (data.method === 'link' && data.url) {
+            data.method = 'call';
+            data.stream = data.url;
+          }
+          
+          videos.push(data);
+        }
+      });
+      
+      return videos;
+    } catch(e) { return []; }
+  }
+
+  function component(object) {
+    var scroll = new Lampa.Scroll({ mask: true, over: true });
+    var files = new Lampa.Explorer(object);
+    var allVideos = [];
+    var totalSources = ALL_SOURCES.length;
+    var doneSources = 0;
+    var last;
+
+    this.create = function() { return files.render(); };
+
+    this.initialize = function() {
+      var _this = this;
+      scroll.body().addClass('torrent-list');
+      files.appendFiles(scroll.render());
+
+      scroll.body().append(
+        '<div style="padding: 2em; text-align: center;">' +
+        '<div style="font-size: 1.8em; margin-bottom: 0.3em;">🔥 TimOs ULTIMATE</div>' +
+        '<div style="font-size: 0.9em; opacity: 0.6; margin-bottom: 1.5em;">' + totalSources + ' источников • 5 серверов • 4K</div>' +
+        '<div class="ult-count" style="font-size: 1.2em; margin-bottom: 0.8em;">Поиск... 0/' + totalSources + '</div>' +
+        '<div style="height: 0.6em; background: rgba(255,255,255,0.1); border-radius: 0.3em; overflow: hidden;">' +
+        '<div class="ult-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff6b35, #d63031, #667eea, #764ba2, #00b894, #fdcb6e); border-radius: 0.3em; transition: width 0.3s;"></div>' +
+        '</div>' +
+        '<div class="ult-status" style="margin-top: 1em; font-size: 0.85em; opacity: 0.7; max-height: 150px; overflow: auto;"></div>' +
+        '</div>'
+      );
+
+      var movie = object.movie || object;
+      var title = movie.title || movie.name || 'Test';
+
+      ALL_SOURCES.forEach(function(source) {
+        var params = [];
+        params.push('id=' + encodeURIComponent(movie.id || '550'));
+        params.push('title=' + encodeURIComponent(title));
+        params.push('original_title=' + encodeURIComponent(movie.original_title || movie.original_name || ''));
+        params.push('serial=' + (movie.name ? 1 : 0));
+        params.push('year=' + ((movie.release_date || movie.first_air_date || '')+'').slice(0,4));
+        if (movie.imdb_id) params.push('imdb_id=' + movie.imdb_id);
+        if (movie.kinopoisk_id) params.push('kinopoisk_id=' + movie.kinopoisk_id);
+        params.push('source=tmdb');
+        params.push('clarification=0');
+
+        var url = source.url + '?' + params.join('&');
+        url = addToken(url, source);
+
+        $.ajax({
+          url: url,
+          method: 'GET',
+          dataType: 'text',
+          timeout: 8000,
+          success: function(data) {
+            var vids = parseVideos(data, source.name);
+            allVideos = allVideos.concat(vids);
+            doneSources++;
+            var pct = Math.round((doneSources / totalSources) * 100);
+            scroll.body().find('.ult-count').text('Поиск... ' + doneSources + '/' + totalSources);
+            scroll.body().find('.ult-bar').css('width', pct + '%');
+            scroll.body().find('.ult-status').append('<div>' + (vids.length > 0 ? '✅ ' : '❌ ') + source.name + (vids.length > 0 ? ' +' + vids.length : '') + '</div>');
+            if (doneSources >= totalSources) finish();
+          },
+          error: function() {
+            doneSources++;
+            var pct = Math.round((doneSources / totalSources) * 100);
+            scroll.body().find('.ult-count').text('Поиск... ' + doneSources + '/' + totalSources);
+            scroll.body().find('.ult-bar').css('width', pct + '%');
+            scroll.body().find('.ult-status').append('<div style="color:#e74c3c;">❌ ' + source.name + '</div>');
+            if (doneSources >= totalSources) finish();
+          }
+        });
+      });
+
+      function finish() {
+        scroll.clear();
+        if (!allVideos.length) {
+          scroll.body().append(
+            '<div style="padding: 4em; text-align: center;">' +
+            '<div style="font-size: 3em; margin-bottom: 0.5em;">😢</div>' +
+            '<div style="font-size: 1.3em;">Ничего не найдено</div>' +
+            '<div style="opacity: 0.5; margin-top: 1em;">Попробуйте изменить название</div>' +
+            '</div>'
+          );
+          Lampa.Controller.enable('content');
+          return;
+        }
+
+        var grouped = {};
+        allVideos.forEach(function(v) {
+          var key = v.source || 'Другое';
+          if (!grouped[key]) grouped[key] = [];
+          grouped[key].push(v);
+        });
+
+        Object.keys(grouped).sort(function(a,b){ return grouped[b].length - grouped[a].length }).forEach(function(srcName) {
+          var srcVideos = grouped[srcName];
+          var block = $(
+            '<div style="margin: 0.5em; padding: 1em; background: rgba(255,255,255,0.05); border-radius: 0.5em;">' +
+            '<div style="font-size: 1.1em; font-weight: bold; color: #ff6b35; margin-bottom: 0.5em;">' + srcName + ' (' + srcVideos.length + ')</div>' +
+            '</div>'
+          );
+
+          srcVideos.forEach(function(video) {
+            var info = [];
+            if (video.quality_text) info.push(video.quality_text);
+            if (video.translate) info.push(video.translate.replace(/\[.*?\]/g, '').trim());
+            if (video.episode) info.push('Серия ' + video.episode);
+
+            var row = $(
+              '<div class="selector" style="padding: 0.8em; background: rgba(255,107,53,0.08); border-radius: 0.3em; margin: 0.3em 0; cursor: pointer; display: flex; justify-content: space-between; align-items: center;">' +
+              '<div style="flex: 1; min-width: 0;">' +
+              '<div style="font-size: 1em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">' + (video.title || 'Без названия') + '</div>' +
+              '<div style="font-size: 0.8em; opacity: 0.5; margin-top: 0.2em;">' + info.join(' ● ') + '</div>' +
+              '</div>' +
+              '<div style="opacity: 0.4; font-size: 1.2em; margin-left: 1em;">▶</div>' +
+              '</div>'
+            );
+
+            row.on('hover:enter', function() {
+              Lampa.Loading.start();
+              
+              var playUrl = video.url || video.stream;
+              if (!playUrl) {
+                Lampa.Loading.stop();
+                Lampa.Noty.show('Ссылка недоступна');
+                return;
+              }
+
+              if (video.method === 'play') {
+                if (playUrl.indexOf('_480.mp4') !== -1) {
+                  playUrl = playUrl.replace('_480.mp4', '_2160.mp4');
+                }
+                Lampa.Loading.stop();
+                Lampa.Player.play({
+                  title: video.title,
+                  url: playUrl,
+                  quality: video.quality_text || 'HD',
+                  isonline: true,
+                  season: video.season,
+                  episode: video.episode
+                });
+                if (movie.id) Lampa.Favorite.add('history', movie, 100);
+              } else {
+                $.ajax({
+                  url: addToken(playUrl, source),
+                  method: 'GET',
+                  dataType: 'json',
+                  timeout: 10000,
+                  success: function(json) {
+                    Lampa.Loading.stop();
+                    var streamUrl = json.url || json.stream || '';
+                    if (streamUrl.indexOf(' or ') !== -1) {
+                      streamUrl = streamUrl.split(' or ')[0];
+                    }
+                    if (streamUrl) {
+                      Lampa.Player.play({
+                        title: video.title,
+                        url: streamUrl,
+                        quality: json.quality || video.quality_text || 'HD',
+                        subtitles: json.subtitles,
+                        isonline: true
+                      });
+                      if (movie.id) Lampa.Favorite.add('history', movie, 100);
+                    } else {
+                      Lampa.Noty.show('Не удалось получить ссылку');
+                    }
+                  },
+                  error: function() {
+                    Lampa.Loading.stop();
+                    Lampa.Noty.show('Ошибка загрузки');
+                  }
+                });
+              }
+            });
+
+            row.on('hover:focus', function(e) { last = e.target; scroll.update($(e.target), true); });
+            block.append(row);
+          });
+
+          scroll.body().append(block);
+        });
+
+        scroll.body().append(
+          '<div class="selector" style="padding: 1.5em; text-align: center; opacity: 0.5; cursor: pointer; margin-top: 1em;">↩ Назад</div>'
+        );
+        scroll.body().find('.selector').last().on('hover:enter', function() { Lampa.Activity.backward(); });
+        Lampa.Controller.enable('content');
+      }
+    };
+
+    this.start = function() {
+      if (Lampa.Activity.active().activity !== this.activity) return;
+      this.initialize();
+      Lampa.Controller.add('content', {
+        toggle: function() { Lampa.Controller.collectionSet(scroll.render()); Lampa.Controller.collectionFocus(false, scroll.render()); },
+        up: function() { Navigator.move('up'); },
+        down: function() { Navigator.move('down'); },
+        right: function() { Navigator.move('right'); },
+        left: function() { if (Navigator.canmove('left')) Navigator.move('left'); else Lampa.Controller.toggle('menu'); },
+        back: function() { Lampa.Activity.backward(); }
+      });
+      Lampa.Controller.toggle('content');
+    };
+
+    this.render = function() { return files.render(); };
+    this.destroy = function() { scroll.destroy(); files.destroy(); };
+  }
+
+  if (!window.timos_ultimate) {
+    window.timos_ultimate = true;
+    Lampa.Component.add('timos_ultimate', component);
+
+    Lampa.Manifest.plugins = {
+      type: 'video',
+      version: '6.0.0',
+      name: 'TimOs ULTIMATE',
+      description: '23 источника • 5 серверов • 4K',
+      component: 'timos_ultimate',
+      onContextLauch: function(obj) {
+        Lampa.Activity.push({ title: '🔥 TimOs ULTIMATE', component: 'timos_ultimate', movie: obj, page: 1 });
+      }
+    };
+
+    Lampa.Listener.follow('full', function(e) {
+      if (e.type === 'complite') {
+        setTimeout(function() {
+          var render = e.object.activity.render();
+          if (render.find('.ultimate-btn').length) return;
+          
+          var btn = $(
+            '<div class="full-start__button selector ultimate-btn" style="background: linear-gradient(135deg, #ff6b35, #d63031, #667eea, #764ba2, #00b894, #fdcb6e); color: #fff; font-weight: 700; font-size: 1.1em;">' +
+            '🔥 TimOs ULTIMATE (23)' +
+            '</div>'
+          );
+          
+          btn.on('hover:enter', function() {
+            Lampa.Activity.push({ title: '🔥 TimOs ULTIMATE', component: 'timos_ultimate', movie: e.data.movie, page: 1 });
+          });
+          
+          render.find('.button--play').before(btn);
+        }, 200);
+      }
+    });
+  }
+})();
