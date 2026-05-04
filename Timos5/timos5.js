@@ -3,7 +3,7 @@
 
   // ============================================
   // 🔥 TIMOS ULTIMATE v10.0 - СУПЕР ФИНАЛ
-  // 36 источников • Буфер • VK плеер • Скрытое управление
+  // 40 источников • Буфер • VK плеер • Скрытое управление
   // ============================================
 
   var TOKEN = 'free_token_123';
@@ -16,6 +16,11 @@
   };
 
   var ALL_SOURCES = [
+    { name: '🔴 93 Filmix 4K', url: 'http://93.183.95.219:11378/lite/filmix', token: true },
+    { name: '🔴 93 Mirage 4K', url: 'http://93.183.95.219:11378/lite/mirage', token: true },
+    { name: '🔴 93 Collaps', url: 'http://93.183.95.219:11378/lite/collaps', token: true },
+    { name: '🔴 93 VK Видео', url: 'http://93.183.95.219:11378/lite/vkmovie', token: true, vk: true },
+    { name: '🔴 93 Rutube', url: 'http://93.183.95.219:11378/lite/rutubemovie', token: true },
     { name: '🎬 Z01 Filmix 4K', url: 'http://z01.online/lite/filmix', token: false },
     { name: '📺 Z01 VK Видео', url: 'http://z01.online/lite/vkmovie', token: false, vk: true },
     { name: '🎥 Z01 VeoVeo', url: 'http://z01.online/lite/veoveo', token: false },
@@ -411,7 +416,7 @@
     Lampa.Component.add('timos_ultimate', component);
     Lampa.Manifest.plugins = {
       type: 'video', version: '10.0.0', name: 'TimOs ULTIMATE',
-      description: '36 источников • Буфер • VK Menu • 4K',
+      description: '40 источников • Буфер • VK Menu • 4K',
       component: 'timos_ultimate',
       onContextLauch: function(obj) { Lampa.Activity.push({ title: '🔥 TimOs ULTIMATE v10.0', component: 'timos_ultimate', movie: obj, page: 1 }); }
     };
