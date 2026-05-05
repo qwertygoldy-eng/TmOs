@@ -2,8 +2,8 @@
   'use strict';
 
   // ============================================
-  // 🔥 TimOS — ПОЛНАЯ ВЕРСИЯ v12 FINAL
-  // 40 источников • Буфер • VK плеер • Мышь+Пульт • Подсветка фокуса
+  // 🔥 TimOS — От Папуськи для Мамуськи
+  // 40 источников • Буфер • VK плеер • Мышь+Пульт • Отладчик
   // ============================================
 
   var TOKEN = 'free_token_123';
@@ -58,7 +58,38 @@
     { name: '🎬 Kinolux', url: 'http://showypro.com/lite/kinolux', token: true }
   ];
 
-  // ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+  // ========== ОТЛАДЧИК ==========
+  var DEBUG = true;
+  var debugLog = [];
+  var debugPanel = null;
+
+  function debug(msg, type) {
+    type = type || 'info';
+    var time = new Date().toLocaleTimeString();
+    debugLog.push({ time: time, msg: msg, type: type });
+    console.log('[TimOs] [' + type + '] ' + msg);
+    
+    if (DEBUG && debugPanel) {
+      var colors = { error: '#e74c3c', success: '#2ecc71', warn: '#f39c12', info: '#bdc3c7', stream: '#3498db' };
+      var line = $('<div style="color:' + (colors[type] || '#fff') + ';font-size:10px;padding:2px 8px;border-bottom:1px solid rgba(255,255,255,0.03);font-family:monospace;">' + time + ' ' + msg + '</div>');
+      debugPanel.find('.debug-lines').append(line);
+      debugPanel.find('.debug-lines').scrollTop(99999);
+    }
+  }
+
+  function createDebugPanel() {
+    debugPanel = $(
+      '<div class="timos-debug" style="position:fixed;bottom:0;left:0;right:0;height:220px;background:rgba(0,0,0,0.97);z-index:999999;display:none;flex-direction:column;">' +
+      '<div class="debug-head" style="background:linear-gradient(90deg,#ff6b35,#d63031);color:#fff;padding:6px 12px;display:flex;justify-content:space-between;align-items:center;font-size:11px;cursor:pointer;">' +
+      '<span>🐛 TimOs Debug • <span style="opacity:0.7;">' + ALL_SOURCES.length + ' источников</span></span>' +
+      '<span style="cursor:pointer;font-size:16px;" onclick="$(this).closest(\'.timos-debug\').hide()">✕</span>' +
+      '</div>' +
+      '<div class="debug-lines" style="flex:1;overflow-y:auto;padding:4px 0;"></div>' +
+      '</div>'
+    ).appendTo('body');
+  }
+
+  // ========== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ==========
   function addToken(url, source) {
     if (source.token && url.indexOf('showy_token=') === -1) {
       url = Lampa.Utils.addUrlComponent(url, 'showy_token=' + TOKEN);
@@ -102,72 +133,16 @@
   function playVKVideo(url, title) {
     var container = document.createElement('div');
     container.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:#000;z-index:99999';
-    
     var video = document.createElement('video');
-    video.controls = true;
-    video.autoplay = true;
-    video.style.cssText = 'width:100%;height:100%';
-    video.src = url;
-    video.preload = 'auto';
-    
-    var menuBtn = document.createElement('div');
-    menuBtn.innerHTML = '⋮';
-    menuBtn.style.cssText = 'position:fixed;bottom:20px;right:20px;width:45px;height:45px;background:rgba(0,0,0,0.7);color:white;font-size:28px;text-align:center;line-height:45px;border-radius:50%;cursor:pointer;z-index:100001;font-weight:bold;transition:0.3s';
-    
-    var menu = document.createElement('div');
-    menu.style.cssText = 'position:fixed;bottom:75px;right:20px;background:rgba(0,0,0,0.9);border-radius:10px;padding:10px;z-index:100002;display:none;min-width:120px';
-    
-    var bufferLabel = document.createElement('div');
-    bufferLabel.style.cssText = 'color:#ff6b35;padding:8px 15px;font-size:14px;border-bottom:1px solid #333;margin-bottom:5px';
-    bufferLabel.innerHTML = 'Буфер: ' + BUFFER_CONFIG.current + 'c';
-    menu.appendChild(bufferLabel);
-    
-    BUFFER_CONFIG.options.forEach(function(sec) {
-      var btn = document.createElement('div');
-      btn.innerHTML = sec + ' сек';
-      btn.style.cssText = 'color:white;padding:8px 15px;cursor:pointer;border-radius:5px;margin:2px 0;font-size:14px;transition:0.2s';
-      btn.onmouseenter = function() { this.style.background = '#ff6b35'; };
-      btn.onmouseleave = function() { this.style.background = 'transparent'; };
-      btn.onclick = function() {
-        BUFFER_CONFIG.current = sec;
-        bufferLabel.innerHTML = 'Буфер: ' + sec + 'c';
-        Lampa.Noty.show('Буфер: ' + sec + ' сек');
-        menu.style.display = 'none';
-      };
-      menu.appendChild(btn);
-    });
-    
-    menuBtn.onclick = function(e) {
-      e.stopPropagation();
-      menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
-    };
-    
-    document.addEventListener('click', function(e) {
-      if (menu.style.display === 'block' && !menu.contains(e.target) && e.target !== menuBtn) {
-        menu.style.display = 'none';
-      }
-    });
-
-    var closeBtn = document.createElement('div');
-    closeBtn.innerHTML = 'Закрыть';
-    closeBtn.style.cssText = 'color:#e74c3c;padding:8px 15px;cursor:pointer;border-radius:5px;font-size:14px;margin-top:5px;border-top:1px solid #333';
-    closeBtn.onclick = function() {
-      video.pause();
-      video.src = '';
-      document.body.removeChild(container);
-      Lampa.Controller.enableAll();
-    };
-    menu.appendChild(closeBtn);
-    
+    video.controls = true; video.autoplay = true;
+    video.style.cssText = 'width:100%;height:100%'; video.src = url;
     container.appendChild(video);
-    container.appendChild(menuBtn);
-    container.appendChild(menu);
     document.body.appendChild(container);
     Lampa.Controller.disableAll();
     Lampa.Loading.stop();
   }
 
-  // ОСНОВНОЙ КОМПОНЕНТ
+  // ========== ОСНОВНОЙ КОМПОНЕНТ ==========
   function component(object) {
     var scroll = new Lampa.Scroll({ mask: true, over: true });
     var files = new Lampa.Explorer(object);
@@ -185,25 +160,38 @@
     this.initialize = function() {
       var _this = this;
       
+      createDebugPanel();
+      debug('Инициализация плагина...', 'info');
+      debug('Всего источников: ' + totalSources, 'info');
+      
       files.appendFiles(scroll.render());
       files.appendHead(filter.render());
       scroll.body().addClass('torrent-list');
       scroll.minus(files.render().find('.explorer__files-head'));
 
+      // КРУТОЙ ВИДЖЕТ
       scroll.append($(
-        '<div style="padding: 1.5em; text-align: center;">' +
-        '<div style="font-size: 1.5em; margin-bottom: 0.3em;">TimOs v12</div>' +
-        '<div style="font-size: 0.85em; opacity: 0.5; margin-bottom: 1em;">' + totalSources + ' источников • 4K</div>' +
-        '<div id="v12-count" style="font-size: 1em; margin-bottom: 0.5em;">Поиск: 0/' + totalSources + '</div>' +
-        '<div style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0 1em;">' +
-        '<div id="v12-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff6b35, #d63031, #667eea, #764ba2, #00b894, #fdcb6e); border-radius: 2px; transition: width 0.3s;"></div>' +
+        '<div style="padding: 1.2em; text-align: center; background: linear-gradient(135deg, rgba(255,107,53,0.15), rgba(102,126,234,0.15)); border-radius: 0.5em; margin: 0.5em;">' +
+        '<div style="font-size: 1.6em; font-weight: 700; background: linear-gradient(90deg, #ff6b35, #d63031, #667eea); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">От Папуськи для Мамуськи</div>' +
+        '<div style="font-size: 0.7em; opacity: 0.4; margin-top: 0.2em; font-style: italic;">TimOs v12 • ' + totalSources + ' источников • 4K</div>' +
+        '<div id="v12-count" style="font-size: 0.9em; margin-top: 0.8em; color: #fff;">Поиск: 0/' + totalSources + '</div>' +
+        '<div style="height: 3px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0.5em 1em 0 1em;">' +
+        '<div id="v12-bar" style="height: 100%; width: 0%; background: linear-gradient(90deg, #ff6b35, #d63031, #667eea, #764ba2, #00b894); border-radius: 2px; transition: width 0.3s;"></div>' +
         '</div>' +
-        '<div id="v12-log" style="margin-top: 0.8em; font-size: 0.75em; opacity: 0.6; max-height: 120px; overflow-y: auto; text-align: left; padding: 0 1em;"></div>' +
+        '<div id="v12-log" style="margin-top: 0.5em; font-size: 0.7em; opacity: 0.6; max-height: 100px; overflow-y: auto; text-align: left; padding: 0 1em;"></div>' +
+        '<button class="debug-toggle" style="margin-top:0.8em;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);color:#fff;padding:4px 15px;border-radius:15px;font-size:0.75em;cursor:pointer;">🐛 Отладка</button>' +
         '</div>'
       ));
+      
+      $('.debug-toggle').on('click', function() {
+        debugPanel.toggle();
+        debug('Отладчик ' + (debugPanel.is(':visible') ? 'открыт' : 'закрыт'), 'warn');
+      });
 
       var movie = object.movie || object;
       var title = movie.title || movie.name || '';
+      
+      debug('Начинаю поиск: ' + title, 'info');
 
       ALL_SOURCES.forEach(function(source) {
         var params = [];
@@ -227,11 +215,13 @@
             allVideos = allVideos.concat(vids);
             doneSources++;
             updateUI(source.name, vids.length);
+            debug(source.name + ': ' + (vids.length > 0 ? 'НАЙДЕНО ' + vids.length : 'пусто'), vids.length > 0 ? 'success' : 'warn');
             if (doneSources >= totalSources) _this.finish(movie);
           },
-          error: function() {
+          error: function(xhr, status, err) {
             doneSources++;
             updateUI(source.name, -1);
+            debug(source.name + ': ОШИБКА ' + (xhr.status || status), 'error');
             if (doneSources >= totalSources) _this.finish(movie);
           }
         });
@@ -241,9 +231,8 @@
         var pct = Math.round((doneSources / totalSources) * 100);
         $('#v12-count').text('Поиск: ' + doneSources + '/' + totalSources);
         $('#v12-bar').css('width', pct + '%');
-        var icon = count > 0 ? 'OK' : count === 0 ? '--' : 'ER';
-        var extra = count > 0 ? ' +' + count : '';
-        $('#v12-log').append('<div>' + icon + ' ' + name + extra + '</div>');
+        var icon = count > 0 ? '✅' : count === 0 ? '⚠️' : '❌';
+        $('#v12-log').append('<div>' + icon + ' ' + name + (count > 0 ? ' +' + count : '') + '</div>');
         var logEl = $('#v12-log')[0];
         if (logEl) logEl.scrollTop = logEl.scrollHeight;
       }
@@ -254,8 +243,10 @@
       allItems = [];
       currentFocusIndex = -1;
       
+      debug('Финальная обработка. Всего видео: ' + allVideos.length, allVideos.length > 0 ? 'success' : 'error');
+      
       if (!allVideos.length) {
-        scroll.append($('<div style="padding: 4em; text-align: center; font-size: 1.2em;">Ничего не найдено</div>'));
+        scroll.append($('<div style="padding: 4em; text-align: center; font-size: 1.2em;">😢 Ничего не найдено</div>'));
         Lampa.Controller.enable('content');
         return;
       }
@@ -268,10 +259,12 @@
       });
 
       var keys = Object.keys(grouped).sort(function(a,b){ return grouped[b].length - grouped[a].length });
+      
+      debug('Группировка: ' + keys.length + ' источников с видео', 'info');
 
       scroll.append($(
-        '<div style="padding: 0.6em; text-align: center; background: rgba(255,107,53,0.15); border-radius: 0.3em; margin: 0.5em;">' +
-        '<div style="font-size: 1em; font-weight: bold; color: #ff6b35;">Найдено: ' + allVideos.length + ' видео</div>' +
+        '<div style="padding: 0.5em; text-align: center; background: rgba(255,107,53,0.15); border-radius: 0.3em; margin: 0.5em;">' +
+        '<div style="font-size: 0.95em; font-weight: bold; color: #ff6b35;">🎬 Найдено: ' + allVideos.length + ' видео</div>' +
         '</div>'
       ));
 
@@ -279,7 +272,7 @@
         var srcVideos = grouped[srcName];
         
         scroll.append($(
-          '<div style="margin: 0.4em 0.5em; padding: 0.4em 0.8em; background: rgba(255,107,53,0.08); border-left: 3px solid #ff6b35; border-radius: 0.2em;">' +
+          '<div style="margin: 0.3em 0.5em; padding: 0.4em 0.8em; background: rgba(255,107,53,0.08); border-left: 3px solid #ff6b35; border-radius: 0.2em;">' +
           '<div style="font-size: 0.85em; font-weight: bold; color: #ff6b35;">' + srcName + ' (' + srcVideos.length + ')</div>' +
           '</div>'
         ));
@@ -300,42 +293,27 @@
             '</div>'
           );
 
-          // Мышь
           row.on('hover:enter', function() {
             var idx = allItems.indexOf(this);
             if (idx >= 0) {
-              // Сброс фокуса
               if (currentFocusIndex >= 0 && allItems[currentFocusIndex]) {
-                $(allItems[currentFocusIndex]).css({
-                  'background': 'rgba(255,107,53,0.03)',
-                  'border': 'none'
-                });
+                $(allItems[currentFocusIndex]).css({'background': 'rgba(255,107,53,0.03)', 'border': 'none'});
               }
               currentFocusIndex = idx;
-              $(this).css({
-                'background': 'rgba(255,107,53,0.25)',
-                'border': '1px solid #ff6b35'
-              });
+              $(this).css({'background': 'rgba(255,107,53,0.25)', 'border': '1px solid #ff6b35'});
             }
             _this.playVideo(video, movie);
           });
 
-          // Пульт/Мышь фокус
           row.on('hover:focus', function(e) {
             last = e.target;
             var idx = allItems.indexOf(this);
             if (idx >= 0 && currentFocusIndex >= 0 && allItems[currentFocusIndex] && allItems[currentFocusIndex] !== this) {
-              $(allItems[currentFocusIndex]).css({
-                'background': 'rgba(255,107,53,0.03)',
-                'border': 'none'
-              });
+              $(allItems[currentFocusIndex]).css({'background': 'rgba(255,107,53,0.03)', 'border': 'none'});
             }
             if (idx >= 0) {
               currentFocusIndex = idx;
-              $(this).css({
-                'background': 'rgba(255,107,53,0.25)',
-                'border': '1px solid #ff6b35'
-              });
+              $(this).css({'background': 'rgba(255,107,53,0.25)', 'border': '1px solid #ff6b35'});
               scroll.update($(this), true);
             }
           });
@@ -346,45 +324,56 @@
       });
 
       scroll.append($(
-        '<div class="selector" style="padding: 1.5em; text-align: center; opacity: 0.4; cursor: pointer; margin-top: 1em;">Назад</div>'
+        '<div class="selector" style="padding: 1.5em; text-align: center; opacity: 0.4; cursor: pointer; margin-top: 1em;">↩ Назад</div>'
       ).on('hover:enter', function() { 
         currentFocusIndex = -1;
         Lampa.Activity.backward(); 
       }));
 
-      // Подсветить первый элемент
       setTimeout(function() {
         if (allItems.length > 0) {
           currentFocusIndex = 0;
-          $(allItems[0]).css({
-            'background': 'rgba(255,107,53,0.25)',
-            'border': '1px solid #ff6b35'
-          });
+          $(allItems[0]).css({'background': 'rgba(255,107,53,0.25)', 'border': '1px solid #ff6b35'});
           last = allItems[0];
+          debug('Фокус установлен на первый элемент', 'info');
         }
       }, 100);
       
+      debug('Готово! ' + allVideos.length + ' видео из ' + keys.length + ' источников', 'success');
       Lampa.Controller.enable('content');
     };
 
     this.playVideo = function(video, movie) {
+      debug('Запуск видео: ' + (video.title || 'Без названия').substring(0, 50), 'stream');
+      
       Lampa.Loading.start();
       var playUrl = video.url || video.stream;
-      if (!playUrl) { Lampa.Loading.stop(); Lampa.Noty.show('Ссылка недоступна'); return; }
+      if (!playUrl) { 
+        Lampa.Loading.stop(); 
+        debug('ОШИБКА: нет ссылки', 'error');
+        Lampa.Noty.show('Ссылка недоступна'); 
+        return; 
+      }
 
       if (playUrl.indexOf('vkuser.net') !== -1 || playUrl.indexOf('okcdn.ru') !== -1 || playUrl.indexOf('vkvd') !== -1) {
         Lampa.Loading.stop();
+        debug('VK видео: ' + playUrl.substring(0, 80), 'stream');
         playVKVideo(playUrl, video.title);
         if (movie && movie.id) Lampa.Favorite.add('history', movie, 100);
         return;
       }
 
       if (video.method === 'play') {
-        if (playUrl.indexOf('_480.mp4') !== -1) playUrl = playUrl.replace('_480.mp4', '_2160.mp4');
+        if (playUrl.indexOf('_480.mp4') !== -1) {
+          playUrl = playUrl.replace('_480.mp4', '_2160.mp4');
+          debug('Апгрейд качества: 480p → 2160p', 'warn');
+        }
         Lampa.Loading.stop();
         Lampa.Player.play({ title: video.title, url: playUrl, quality: video.quality_text || 'HD', isonline: true });
+        debug('Воспроизведение: ' + playUrl.substring(0, 80), 'success');
         if (movie && movie.id) Lampa.Favorite.add('history', movie, 100);
       } else {
+        debug('Двойной запрос: ' + playUrl.substring(0, 80), 'info');
         $.ajax({
           url: addToken(playUrl, {token: true}), method: 'GET', dataType: 'json', timeout: 10000,
           success: function(json) {
@@ -393,10 +382,18 @@
             if (s.indexOf(' or ') !== -1) s = s.split(' or ')[0];
             if (s) {
               Lampa.Player.play({ title: video.title, url: s, quality: json.quality || video.quality_text || 'HD', subtitles: json.subtitles, isonline: true });
+              debug('Стрим получен: ' + s.substring(0, 80), 'success');
               if (movie && movie.id) Lampa.Favorite.add('history', movie, 100);
-            } else Lampa.Noty.show('Не удалось');
+            } else {
+              debug('ОШИБКА: пустой ответ от сервера', 'error');
+              Lampa.Noty.show('Не удалось');
+            }
           },
-          error: function() { Lampa.Loading.stop(); Lampa.Noty.show('Ошибка'); }
+          error: function(xhr, status, err) {
+            Lampa.Loading.stop();
+            debug('ОШИБКА запроса: ' + (xhr.status || status) + ' ' + (err || ''), 'error');
+            Lampa.Noty.show('Ошибка');
+          }
         });
       }
     };
@@ -404,6 +401,7 @@
     this.start = function() {
       if (Lampa.Activity.active().activity !== this.activity) return;
       this.initialize();
+      debug('Плагин запущен. Навигация активна.', 'success');
       
       Lampa.Controller.add('content', {
         toggle: function() { 
@@ -441,30 +439,30 @@
             $(allItems[currentFocusIndex]).trigger('hover:enter');
           }
         },
-        left: function() { 
-          Lampa.Activity.backward(); 
-        },
-        back: function() { 
-          Lampa.Activity.backward(); 
-        }
+        left: function() { Lampa.Activity.backward(); },
+        back: function() { Lampa.Activity.backward(); }
       });
       
       Lampa.Controller.toggle('content');
     };
 
-    this.destroy = function() { scroll.destroy(); files.destroy(); };
+    this.destroy = function() { 
+      debug('Плагин выгружен', 'warn');
+      if (debugPanel) debugPanel.remove();
+      scroll.destroy(); files.destroy(); 
+    };
   }
 
-  // РЕГИСТРАЦИЯ
+  // ========== РЕГИСТРАЦИЯ ==========
   if (!window.timos_v12_final) {
     window.timos_v12_final = true;
     Lampa.Component.add('timos_v12_final', component);
     Lampa.Manifest.plugins = {
       type: 'video', version: '12.0.0', name: 'TimOs v12',
-      description: '40 источников • Мышь+Пульт • 4K',
+      description: 'От Папуськи для Мамуськи • TimOs',
       component: 'timos_v12_final',
       onContextLauch: function(obj) { 
-        Lampa.Activity.push({ title: 'TimOs v12', component: 'timos_v12_final', movie: obj, page: 1 }); 
+        Lampa.Activity.push({ title: 'От Папуськи для Мамуськи', component: 'timos_v12_final', movie: obj, page: 1 }); 
       }
     };
     Lampa.Listener.follow('full', function(e) {
@@ -472,9 +470,9 @@
         setTimeout(function() {
           var r = e.object.activity.render();
           if (r.find('.timos-v12-btn').length) return;
-          var b = $('<div class="full-start__button selector timos-v12-btn" style="background:linear-gradient(135deg,#ff6b35,#d63031,#667eea,#764ba2,#00b894,#fdcb6e);color:#fff;font-weight:700;font-size:1.1em;">TimOs v12 (40)</div>');
+          var b = $('<div class="full-start__button selector timos-v12-btn" style="background:linear-gradient(135deg,#ff6b35,#d63031,#667eea,#764ba2,#00b894,#fdcb6e);color:#fff;font-weight:700;font-size:1.1em;text-align:center;">❤️ От Папуськи для Мамуськи</div>');
           b.on('hover:enter', function() { 
-            Lampa.Activity.push({ title: 'TimOs v12', component: 'timos_v12_final', movie: e.data.movie, page: 1 }); 
+            Lampa.Activity.push({ title: 'От Папуськи для Мамуськи', component: 'timos_v12_final', movie: e.data.movie, page: 1 }); 
           });
           r.find('.button--play').before(b);
         }, 200);
